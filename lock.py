@@ -32,16 +32,17 @@ while exec_timeout >= 0:
     #lock is already set. either someone has set lock or it has gone stale.
     
     #get the value of the lock key to check whether it has gone stale
-    old_lock_expiry = float(r.get(lock_key))
-
-    #if the lock expiry time has bypassed we kick it out
-    #we also see whether someone jumped us to clear the stale lock
-    #getset gives us the old value and we try to match it with the time we compared and if it differs no high fives as of yet
-    if old_lock_expiry and old_lock_expiry < current_time and float(r.getset(lock_key, (current_time + lock_timeout))) == old_lock_expiry:
-        lock_state = "Acquired"
-        print "Stale lock cleared"
-        
-        break
+    old_lock_expiry = r.get(lock_key)
+    
+    if old_lock_expiry is not None:
+        #if the lock expiry time has bypassed we kick it out
+        #we also see whether someone jumped us to clear the stale lock
+        #getset gives us the old value and we try to match it with the time we compared and if it differs no high fives as of yet
+        if old_lock_expiry and float(old_lock_expiry) < current_time and float(r.getset(lock_key, (current_time + lock_timeout))) == float(old_lock_expiry):
+            lock_state = "Acquired"
+            print "Stale lock cleared"
+            
+            break
 
     exec_timeout -= 1
     time.sleep(1)
@@ -50,18 +51,21 @@ if lock_state == "Acquired":
     #do your stuff here
     print "Mint your bitcoin here or walk your dog"
 
-    lock_expiry = float(r.get(lock_key))
+    lock_expiry = r.get(lock_key)
     
     #for redis lt 2.6 use time.time()
     current_time = r.time()
     current_time = float('.'.join(str(i) for i in current_time))
 
-    #time to delete the lock but before deletion check whether we are within our timeout period to do so
-    if lock_expiry and lock_expiry > current_time:
-        print "Lock deleted"
-        
-        r.delete(lock_key)
+    if lock_expiry is not None:
+        #time to delete the lock but before deletion check whether we are within our timeout period to do so
+        if lock_expiry and float(lock_expiry) > current_time:
+            print "Lock deleted"
+            
+            r.delete(lock_key)
+        else:
+            print "Backing off from deleting the lock"
     else:
-        print "Backing off from deleting the lock"
+        print "Lock already deleted"
 else:
     print "Timed out."
